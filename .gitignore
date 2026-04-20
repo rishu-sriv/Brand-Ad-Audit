@@ -1,0 +1,18 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+
+# Sensitive inputs and run artifacts
+brands.csv
+d2c_leads.csv
+failed.csv
+page_id_cache.csv
+audit.pid
+audit_run.log
+
+# Generated outputs (can include sensitive ad/account data)
+output/
+
+# Local/editor/system files
+.DS_Store
