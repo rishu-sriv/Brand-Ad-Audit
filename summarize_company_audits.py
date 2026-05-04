@@ -4,6 +4,7 @@ import csv
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+import re
 
 
 OUTPUT_DIR = Path("output")
@@ -77,12 +78,225 @@ def summarize_platforms(ads: list[dict]) -> str:
     return ", ".join(mapping.get(p, p.title()) for p in sorted_platforms)
 
 
+OFFER_RE = re.compile(r"(off|discount|sale|deal|free shipping|cod|cash on delivery|b1g1|buy\s*\d)", re.I)
+
+
+def _snapshot(ad: dict) -> dict:
+    snap = ad.get("snapshot")
+    return snap if isinstance(snap, dict) else {}
+
+
+def _body_text(snap: dict) -> str:
+    body = snap.get("body")
+    if isinstance(body, dict):
+        return str(body.get("text") or "")
+    if isinstance(body, str):
+        return body
+    return ""
+
+
+def dynamic_findings(company: str, ads: list[dict]) -> tuple[list[tuple[str, list[str], str]], str]:
+    if not ads:
+        return (
+            [
+                (
+                    "Limited evidence from current ad pull",
+                    [
+                        "Very low or no active creatives in this payload.",
+                        "Need a larger sample before diagnosing messaging and channel strategy.",
+                        "Re-run after campaigns refresh for a stronger readout.",
+                    ],
+                    "insufficient signal, so prioritization is unclear",
+                )
+            ],
+            "\"Your current Meta sample is too thin to optimize confidently. Let's first improve signal quality, then tune strategy.\"",
+        )
+
+    findings: list[tuple[str, list[str], str]] = []
+    snaps = [_snapshot(ad) for ad in ads]
+
+    # 1) Offer intensity
+    offer_hits = 0
+    for snap in snaps:
+        text = f"{_body_text(snap)} {snap.get('title') or ''}"
+        if OFFER_RE.search(text):
+            offer_hits += 1
+    offer_ratio = offer_hits / max(len(snaps), 1)
+    if offer_ratio >= 0.4:
+        findings.append(
+            (
+                "High dependence on offer-led hooks",
+                [
+                    f"~{round(offer_ratio * 100)}% of creatives include discount/COD/sale language.",
+                    "Offer-first framing attracts price-sensitive traffic by default.",
+                    "Brand and problem-solution storytelling gets less airtime.",
+                ],
+                "higher margin pressure and weaker full-price demand quality",
+            )
+        )
+    else:
+        findings.append(
+            (
+                "Offer pressure is present but not dominant",
+                [
+                    f"Only ~{round(offer_ratio * 100)}% of creatives are explicitly offer-led.",
+                    "There is room to scale narrative/benefit-led variants.",
+                    "A clearer testing plan can raise message quality without over-discounting.",
+                ],
+                "inconsistent value communication across campaigns",
+            )
+        )
+
+    # 2) Creative repetition
+    body_counter = Counter()
+    for snap in snaps:
+        body = _body_text(snap).strip()
+        if body:
+            body_counter[body] += 1
+    repeated = body_counter.most_common(1)[0][1] if body_counter else 1
+    repeated_ratio = repeated / max(len(snaps), 1)
+    if repeated_ratio >= 0.35:
+        findings.append(
+            (
+                "Creative memory loop looks shallow",
+                [
+                    f"Top body line repeats across ~{round(repeated_ratio * 100)}% of ads.",
+                    "High repetition signals limited hook experimentation.",
+                    "Variation likely happens in format more than message.",
+                ],
+                "learning slows while fatigue risk rises",
+            )
+        )
+    else:
+        findings.append(
+            (
+                "Some creative variation exists, but structure is unclear",
+                [
+                    "No single body line dominates heavily.",
+                    "Variation should be tied to a planned sequence, not random refreshes.",
+                    "Track winners by hook and audience stage, not just CPM/CTR.",
+                ],
+                "fragmented learnings across creatives",
+            )
+        )
+
+    # 3) CTA concentration
+    cta_counter = Counter()
+    for snap in snaps:
+        cta = str(snap.get("cta_text") or "").strip()
+        if cta:
+            cta_counter[cta] += 1
+    if cta_counter:
+        top_cta, top_cta_count = cta_counter.most_common(1)[0]
+        top_cta_ratio = top_cta_count / max(len(snaps), 1)
+        if top_cta_ratio >= 0.65:
+            findings.append(
+                (
+                    "Journey orchestration is mostly single-step",
+                    [
+                        f"CTA '{top_cta}' appears in ~{round(top_cta_ratio * 100)}% of creatives.",
+                        "Most ads push the same immediate action.",
+                        "Little evidence of stage-based CTA progression.",
+                    ],
+                    "flat funnel behavior instead of guided progression",
+                )
+            )
+        else:
+            findings.append(
+                (
+                    "CTA mix is diversified",
+                    [
+                        f"Top CTA '{top_cta}' appears in ~{round(top_cta_ratio * 100)}% of creatives.",
+                        "Multiple CTAs indicate some stage segmentation.",
+                        "Next step is validating if CTA mix maps to audience intent.",
+                    ],
+                    "potential mismatch between CTA choice and user stage",
+                )
+            )
+
+    # 4) Channel spread
+    platform_set = set()
+    for ad in ads:
+        for p in ad.get("publisher_platform", []) or []:
+            platform_set.add(p)
+    if len(platform_set) >= 4:
+        findings.append(
+            (
+                "Wide platform spread needs channel-specific positioning",
+                [
+                    f"Creatives are running across {len(platform_set)} Meta placements.",
+                    "One generic message across all placements usually underperforms.",
+                    "Each channel should carry tailored creative context and proof.",
+                ],
+                "reach scales faster than message-fit quality",
+            )
+        )
+    else:
+        findings.append(
+            (
+                "Narrow placement footprint",
+                [
+                    f"Active footprint appears concentrated to {len(platform_set)} placements.",
+                    "Depth can be good, but dependence increases auction volatility.",
+                    "Controlled expansion tests can improve resilience.",
+                ],
+                "media dependency on a small placement mix",
+            )
+        )
+
+    # 5) Format dominance
+    format_counter = Counter(str(s.get("display_format") or "UNKNOWN") for s in snaps)
+    if format_counter:
+        top_format, top_format_count = format_counter.most_common(1)[0]
+        top_format_ratio = top_format_count / max(len(snaps), 1)
+        if top_format_ratio >= 0.6:
+            findings.append(
+                (
+                    "Format diversification is low",
+                    [
+                        f"'{top_format}' drives ~{round(top_format_ratio * 100)}% of sampled creatives.",
+                        "Heavy single-format dependence can limit message depth.",
+                        "Balanced format mix improves testing surface and recall.",
+                    ],
+                    "creative strategy over-indexes on one delivery format",
+                )
+            )
+        else:
+            findings.append(
+                (
+                    "Format mix is relatively balanced",
+                    [
+                        f"Top format '{top_format}' is ~{round(top_format_ratio * 100)}% of sample.",
+                        "Good base for testing hooks by format-intent pair.",
+                        "Main gap is likely in sequencing and measurement, not inventory breadth.",
+                    ],
+                    "experimentation exists but lacks structured memory",
+                )
+            )
+
+    pitch = (
+        "\"You're generating delivery across Meta, but strategy memory is still weak. "
+        "Let's connect creative, CTA, and offer signals into one learning loop so each campaign compounds.\""
+    )
+    return findings[:5], pitch
+
+
 def build_summary(company: str, payload: dict) -> str:
     ads = payload.get("ads", []) if isinstance(payload.get("ads", []), list) else []
     total_results = payload.get("search_information", {}).get("total_results", len(ads))
     start, end = flight_window(ads)
     platforms = summarize_platforms(ads)
     formats = summarize_formats(ads)
+    findings, pitch = dynamic_findings(company, ads)
+
+    findings_lines: list[str] = []
+    for idx, (title, bullets, result) in enumerate(findings, 1):
+        findings_lines.append(f"{idx}. ❌ {title}")
+        findings_lines.extend(bullets)
+        findings_lines.append("")
+        findings_lines.append(f"👉 Result: {result}")
+        findings_lines.append("")
+    findings_block = "\n".join(findings_lines).rstrip()
 
     return f"""## {company}
 
@@ -93,45 +307,12 @@ Platforms: {platforms}
 Formats: {formats}
 
 🧠 What {company} is missing
-1. ❌ No memory -> stateless ads
-DPA / DCO + catalog scaling
-Every ad = first-time experience
-No awareness of what user already saw
-No sequencing or cross-session learning
-
-👉 Result: repetition, not compounding
-
-2. ❌ No journey orchestration
-Flow = click -> PDP -> hope
-No "what next if no conversion"
-No funnel progression (style -> offer -> proof -> urgency)
-
-👉 Result: flat funnel, no narrative
-
-3. ❌ Over-reliance on offers
-B1G1, discounts, price-led hooks
-Missing identity + lifestyle positioning
-No contextual messaging by persona/use-case
-
-👉 Result: margin pressure + commoditization
-
-4. ❌ No creative learning loop
-Creatives scale, but learnings don't
-No hook-level intelligence
-No cross-campaign memory
-
-👉 Result: re-learning the same lessons
-
-5. ❌ Weak differentiation
-Product-led, clean, offer-heavy ads
-Missing UGC, story, emotion, problem hooks
-
-👉 Result: blends with every D2C brand
+{findings_block}
 
 Pitch Angle
 One-liner
 
-"You've optimized delivery - but not memory. So your ads scale impressions, not learning."
+{pitch}
 """
 
 
