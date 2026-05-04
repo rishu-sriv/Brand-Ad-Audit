@@ -1,7 +1,11 @@
 """
 Meta Ad Library Audit Script
-Input:  brands.csv (column: brand_name)
+Input:  brands.csv (column brand_name) or any CSV via -i/--input and --brand-column
 Output: output/{brand_name}.json, page_id_cache.csv, failed.csv
+
+SearchAPI: set SEARCHAPI_KEY, or SEARCHAPI_KEYS (comma-separated) with automatic
+rotation every SEARCHAPI_KEY_BATCH_SIZE SearchAPI requests (default 100) when multiple
+keys are set — only rows that reach fetch_ads count (e.g. not if page_id resolution fails).
 """
 
 import asyncio
@@ -19,7 +23,9 @@ import requests
 from playwright.async_api import async_playwright
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SEARCHAPI_KEY = os.getenv("SEARCHAPI_KEY")
+# Single key: SEARCHAPI_KEY=...
+# Multiple keys (100 brands per key by default): SEARCHAPI_KEYS=key1,key2,key3
+# Optional override: SEARCHAPI_KEY_BATCH_SIZE=100
 COUNTRY = "IN"
 INPUT_CSV = "brands.csv"
 OUTPUT_DIR = Path("output")
@@ -38,9 +44,21 @@ INLINE_TEST_BRANDS = ["Lenskart"]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def load_brands(path: str) -> list[dict]:
+def load_brands(path: str, brand_column: str = "brand_name") -> list[dict]:
     with open(path, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+        reader = csv.DictReader(f)
+        if reader.fieldnames is None:
+            return []
+        if brand_column not in reader.fieldnames:
+            raise ValueError(
+                f"Column {brand_column!r} not in {path}. Columns: {', '.join(reader.fieldnames)}"
+            )
+        brands: list[dict] = []
+        for row in reader:
+            name = (row.get(brand_column) or "").strip()
+            if name:
+                brands.append({"brand_name": name})
+        return brands
 
 
 def load_cache() -> dict:
@@ -181,14 +199,52 @@ async def resolve_page_id(page, brand_name: str) -> str | None:
 
 # ── SearchAPI: fetch ads ──────────────────────────────────────────────────────
 
-def fetch_ads(page_id: str) -> dict | None:
+def _searchapi_keys_and_batch() -> tuple[list[str], int]:
+    raw = (os.getenv("SEARCHAPI_KEYS") or "").strip()
+    batch_raw = (os.getenv("SEARCHAPI_KEY_BATCH_SIZE") or "100").strip()
+    try:
+        batch_size = int(batch_raw)
+    except ValueError as e:
+        raise ValueError("SEARCHAPI_KEY_BATCH_SIZE must be an integer") from e
+    if batch_size < 1:
+        raise ValueError("SEARCHAPI_KEY_BATCH_SIZE must be >= 1")
+
+    if raw:
+        keys = [k.strip() for k in raw.split(",") if k.strip()]
+        if not keys:
+            raise ValueError("SEARCHAPI_KEYS is set but empty after parsing (use comma-separated keys).")
+        return keys, batch_size
+
+    single = (os.getenv("SEARCHAPI_KEY") or "").strip()
+    if not single:
+        raise ValueError("Set SEARCHAPI_KEY or SEARCHAPI_KEYS in the environment or .env.")
+    return [single], batch_size
+
+
+def _key_for_nth_searchapi_call(call_number: int, keys: list[str], batch_size: int) -> str:
+    """
+    call_number is 1-based: first SearchAPI request is 1, second is 2, …
+    Rows that never call SearchAPI (e.g. page_id not resolved) do not advance this.
+    """
+    if len(keys) == 1:
+        return keys[0]
+    slot = (call_number - 1) // batch_size
+    if slot >= len(keys):
+        raise ValueError(
+            f"SearchAPI call #{call_number} needs key slot {slot + 1} ({batch_size} calls per key), "
+            f"but only {len(keys)} key(s) configured. Add another key to SEARCHAPI_KEYS (comma-separated)."
+        )
+    return keys[slot]
+
+
+def fetch_ads(page_id: str, api_key: str) -> dict | None:
     params = {
         "engine": "meta_ad_library",
         "page_id": page_id,
         "country": COUNTRY,
         "active_status": "active",
         "ad_type": "all",
-        "api_key": SEARCHAPI_KEY,
+        "api_key": api_key,
     }
     backoff = 5.0
     for attempt in range(1, 6):
@@ -213,14 +269,20 @@ def fetch_ads(page_id: str) -> dict | None:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-async def run():
-    if not SEARCHAPI_KEY:
-        raise ValueError("SEARCHAPI_KEY is missing. Set it in your environment or .env before running.")
+async def run(input_csv: str | None = None, brand_column: str = "brand_name") -> None:
+    search_keys, batch_size = _searchapi_keys_and_batch()
+    if len(search_keys) > 1:
+        print(
+            f"Using {len(search_keys)} SearchAPI key(s), {batch_size} actual API call(s) per key "
+            f"(skipped rows — no page_id / no fetch — do not consume a slot; "
+            f"up to {len(search_keys) * batch_size} SearchAPI calls with current keys).\n"
+        )
 
     if USE_INLINE_TEST_BRANDS:
         brands = [{"brand_name": brand.strip()} for brand in INLINE_TEST_BRANDS if brand.strip()]
     else:
-        brands = load_brands(INPUT_CSV)
+        csv_path = input_csv or INPUT_CSV
+        brands = load_brands(csv_path, brand_column)
     cache = load_cache()
     print(f"Loaded {len(brands)} brands. Cache has {len(cache)} resolved IDs.\n")
 
@@ -235,6 +297,8 @@ async def run():
             )
         )
         page = await context.new_page()
+
+        searchapi_calls = 0  # incremented only after each fetch_ads() (skipped brands don't count)
 
         for i, row in enumerate(brands, 1):
             brand_name = row["brand_name"].strip()
@@ -253,9 +317,11 @@ async def run():
                 append_cache(brand_name, page_id)
                 await asyncio.sleep(random.uniform(PLAYWRIGHT_DELAY_MIN, PLAYWRIGHT_DELAY_MAX))
 
-            # 2. Fetch ads from SearchAPI
-            print(f"  → SearchAPI: fetching ads for page_id {page_id}")
-            data = fetch_ads(page_id)
+            # 2. Fetch ads from SearchAPI (key rotation counts real calls only, not CSV row index)
+            searchapi_calls += 1
+            api_key = _key_for_nth_searchapi_call(searchapi_calls, search_keys, batch_size)
+            print(f"  → SearchAPI: fetching ads for page_id {page_id} (API call #{searchapi_calls})")
+            data = fetch_ads(page_id, api_key)
             if not data:
                 append_failed(brand_name, "SearchAPI returned no data")
                 continue
@@ -272,4 +338,19 @@ async def run():
 
 
 if __name__ == "__main__":
-    asyncio.run(run())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Fetch Meta Ad Library data per brand row.")
+    parser.add_argument(
+        "-i",
+        "--input",
+        default=None,
+        help=f"Input CSV path (default: {INPUT_CSV})",
+    )
+    parser.add_argument(
+        "--brand-column",
+        default="brand_name",
+        help="CSV column with brand / company name (default: brand_name)",
+    )
+    cli = parser.parse_args()
+    asyncio.run(run(input_csv=cli.input, brand_column=cli.brand_column))
