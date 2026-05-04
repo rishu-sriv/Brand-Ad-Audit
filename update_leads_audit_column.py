@@ -19,7 +19,8 @@ from pathlib import Path
 from export_brand_audits_csv import build_audit_summary
 from summarize_company_audits import json_stem
 
-OUTPUT_DIR = Path("output")
+_REPO_ROOT = Path(__file__).resolve().parent
+OUTPUT_DIR = _REPO_ROOT / "output"
 
 
 def main() -> None:

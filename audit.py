@@ -22,6 +22,13 @@ import re
 import requests
 from playwright.async_api import async_playwright
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass
+
 # ── Config ────────────────────────────────────────────────────────────────────
 # Single key: SEARCHAPI_KEY=...
 # Multiple keys (100 brands per key by default): SEARCHAPI_KEYS=key1,key2,key3
