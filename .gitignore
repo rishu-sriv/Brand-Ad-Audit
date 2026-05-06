@@ -16,3 +16,6 @@ output/
 
 # Local/editor/system files
 .DS_Store
+
+# Playwright persistent Chrome profile (local login/session; huge)
+.playwright-chrome-profile/
