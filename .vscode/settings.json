@@ -1,0 +1,11 @@
+{
+  "files.exclude": {
+    "**/.playwright-chrome-profile": true
+  },
+  "search.exclude": {
+    "**/.playwright-chrome-profile": true
+  },
+  "files.watcherExclude": {
+    "**/.playwright-chrome-profile/**": true
+  }
+}
