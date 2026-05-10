@@ -29,7 +29,7 @@ Wakefit
 ## Run
 
 ```bash
-python audit.py
+python scripts/audit.py
 ```
 
 ## Similarweb Lead Workflow
@@ -37,7 +37,7 @@ python audit.py
 Collect Similarweb channel + traffic source data for a specific company/domain:
 
 ```bash
-python similarweb_audit.py --company gonoise.com --manual-login
+python scripts/similarweb_audit.py --company gonoise.com --manual-login
 ```
 
 Output:
@@ -50,7 +50,7 @@ Tips:
 - Keep the page filters as needed (date range, geo, traffic type) before extraction.
 - If your main Chrome is already open and profile lock happens, attach to existing Chrome:
   1) `open -na "Google Chrome" --args --remote-debugging-port=9222`
-  2) `python similarweb_audit.py --company gonoise.com --connect-cdp-url http://127.0.0.1:9222`
+  2) `python scripts/similarweb_audit.py --company gonoise.com --connect-cdp-url http://127.0.0.1:9222`
 
 ## Output
 

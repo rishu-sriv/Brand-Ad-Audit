@@ -26,7 +26,8 @@ from urllib.parse import quote_plus
 
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError, async_playwright
 
-OUTPUT_DIR = Path("output")
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIR = _REPO_ROOT / "output"
 BASE_URL = "https://adstransparency.google.com/?region=anywhere"
 
 

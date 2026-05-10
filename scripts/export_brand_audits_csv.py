@@ -15,7 +15,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-from summarize_company_audits import (
+from summarization.summarize_company_audits import (
     BRANDS_CSV,
     OUTPUT_DIR,
     flight_window,
@@ -25,6 +25,8 @@ from summarize_company_audits import (
     summarize_formats,
     summarize_platforms,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def snapshot_body_text(snapshot: dict) -> str:
@@ -190,8 +192,8 @@ def main() -> None:
         "-o",
         "--output",
         type=Path,
-        default=Path("output/company_ad_audits.csv"),
-        help="Output CSV path (default: output/company_ad_audits.csv)",
+        default=_REPO_ROOT / "output/company_ad_audits.csv",
+        help="Output CSV path (default: <repo>/output/company_ad_audits.csv)",
     )
     args = parser.parse_args()
 

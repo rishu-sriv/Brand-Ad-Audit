@@ -4,15 +4,15 @@ Push Similarweb ad summaries from output/*_similarweb.json into a leads CSV.
 Matches CSV rows to JSON by merchant_name stem (same rule as audit.py filenames).
 
 Usage:
-  python merge_similarweb_summaries_to_csv.py \\
+  python scripts/summarization/merge_similarweb_summaries_to_csv.py \\
     -i "/Users/rishu/Downloads/Brick Attr - Sheet3_with_similarweb.csv" \\
     -o "/Users/rishu/Downloads/Brick Attr - Sheet3_with_similarweb.csv"
 
   # Only fill rows where Audit Summary is empty or starts with "No audit summary"
-  python merge_similarweb_summaries_to_csv.py -i leads.csv --only-missing
+  python scripts/summarization/merge_similarweb_summaries_to_csv.py -i leads.csv --only-missing
 
   # Write to a different column
-  python merge_similarweb_summaries_to_csv.py -i leads.csv --column "Similarweb Summary"
+  python scripts/summarization/merge_similarweb_summaries_to_csv.py -i leads.csv --column "Similarweb Summary"
 """
 
 from __future__ import annotations
@@ -21,11 +21,16 @@ import argparse
 import csv
 import json
 import shutil
+import sys
 from pathlib import Path
+
+_SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from similarweb_audit import build_ad_focused_summary, has_usable_similarweb_data
 
-_REPO_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = _REPO_ROOT / "output"
 
 

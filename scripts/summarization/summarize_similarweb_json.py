@@ -3,20 +3,25 @@ Build ad-focused markdown summaries from existing output/*_similarweb.json files
 using the same template as similarweb_audit.build_ad_focused_summary.
 
 Usage:
-  python summarize_similarweb_json.py
-  python summarize_similarweb_json.py --output-dir output
-  python summarize_similarweb_json.py --only-usable
+  python scripts/summarization/summarize_similarweb_json.py
+  python scripts/summarization/summarize_similarweb_json.py --output-dir output
+  python scripts/summarization/summarize_similarweb_json.py --only-usable
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+_SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from similarweb_audit import build_ad_focused_summary, has_usable_similarweb_data
 
-_REPO_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = _REPO_ROOT / "output"
 
 

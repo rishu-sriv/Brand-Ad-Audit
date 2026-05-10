@@ -30,8 +30,9 @@ from urllib.parse import urlparse
 
 from playwright.async_api import async_playwright
 
-OUTPUT_DIR = Path("output")
-DEFAULT_PROFILE_DIR = Path(".playwright-chrome-profile")
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIR = _REPO_ROOT / "output"
+DEFAULT_PROFILE_DIR = _REPO_ROOT / ".playwright-chrome-profile"
 SYSTEM_CHROME_USER_DATA_DIR = Path.home() / "Library/Application Support/Google/Chrome"
 DEFAULT_CDP_URL = "http://127.0.0.1:9222"
 SIMILARWEB_BASE = (
@@ -317,7 +318,7 @@ async def collect_similarweb_data(
                     "Example:\n"
                     '  open -na "Google Chrome" --args --remote-debugging-port=9222 --profile-directory="Rishu"\n'
                     "Then run:\n"
-                    "  python similarweb_audit.py --company gonoise.com --connect-cdp-url http://127.0.0.1:9222"
+                    "  python scripts/similarweb_audit.py --company gonoise.com --connect-cdp-url http://127.0.0.1:9222"
                 )
             browser = await p.chromium.connect_over_cdp(connect_url)
             if browser.contexts:

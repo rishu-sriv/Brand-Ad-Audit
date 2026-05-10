@@ -7,8 +7,9 @@ from pathlib import Path
 import re
 
 
-OUTPUT_DIR = Path("output")
-BRANDS_CSV = Path("brands.csv")
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+OUTPUT_DIR = _REPO_ROOT / "output"
+BRANDS_CSV = _REPO_ROOT / "brands.csv"
 
 
 def json_stem(brand_name: str) -> str:

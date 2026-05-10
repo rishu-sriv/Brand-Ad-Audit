@@ -10,6 +10,6 @@ This folder contains safe, minimal examples so users can understand the workflow
 
 1. Copy `.env.example` to `.env` and set `SEARCHAPI_KEY`.
 2. Prepare your own `brands.csv` (not committed).
-3. Run `python audit.py` to fetch ad library JSON.
-4. Run `python summarize_company_audits.py` for markdown summaries.
-5. Run `python export_brand_audits_csv.py` for a `company_name,audit` CSV export.
+3. Run `python scripts/audit.py` to fetch ad library JSON.
+4. Run `python scripts/summarization/summarize_company_audits.py` for markdown summaries.
+5. Run `python scripts/export_brand_audits_csv.py` for a `company_name,audit` CSV export.

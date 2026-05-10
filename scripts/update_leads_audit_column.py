@@ -6,11 +6,11 @@ Prerequisite: run audit.py (with enough JSON files in output/) for each company 
 
 Usage:
   # Same file — only Audit Summary (and any other column names you pass) cells change:
-  python update_leads_audit_column.py -i path/to/leads.csv --company-column merchant_name \\
+  python scripts/update_leads_audit_column.py -i path/to/leads.csv --company-column merchant_name \\
     --audit-column "Audit Summary" --in-place --backup
 
   # Or write a copy instead of -o default _with_audits.csv:
-  python update_leads_audit_column.py -i path/to/leads.csv -o copy.csv
+  python scripts/update_leads_audit_column.py -i path/to/leads.csv -o copy.csv
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ import shutil
 from pathlib import Path
 
 from export_brand_audits_csv import build_audit_summary
-from summarize_company_audits import json_stem, meta_library_page_matches_brand
+from summarization.summarize_company_audits import json_stem, meta_library_page_matches_brand
 
-_REPO_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = _REPO_ROOT / "output"
 
 

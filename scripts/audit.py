@@ -22,10 +22,12 @@ import re
 import requests
 from playwright.async_api import async_playwright
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(Path(__file__).resolve().parent / ".env")
+    load_dotenv(_REPO_ROOT / ".env")
 except ImportError:
     pass
 
@@ -34,10 +36,10 @@ except ImportError:
 # Multiple keys (100 brands per key by default): SEARCHAPI_KEYS=key1,key2,key3
 # Optional override: SEARCHAPI_KEY_BATCH_SIZE=100
 COUNTRY = "IN"
-INPUT_CSV = "brands.csv"
-OUTPUT_DIR = Path("output")
-CACHE_FILE = Path("page_id_cache.csv")
-FAILED_FILE = Path("failed.csv")
+INPUT_CSV = str(_REPO_ROOT / "brands.csv")
+OUTPUT_DIR = _REPO_ROOT / "output"
+CACHE_FILE = _REPO_ROOT / "page_id_cache.csv"
+FAILED_FILE = _REPO_ROOT / "failed.csv"
 
 PLAYWRIGHT_DELAY_MIN = 3  # seconds between browser requests
 PLAYWRIGHT_DELAY_MAX = 6
